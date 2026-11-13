@@ -166,38 +166,41 @@ function toolSpec() {
       + '- 不要用这个工具做破坏性操作（删文件、关窗口、支付），除非主人明确要求。\n\n'
       + 'actions: status / windows / capture / click / type / key / scroll / drag / move / pause / resume / overlay。',
     parameters: {
-      action: {
-        type: 'string',
-        required: true,
-        description: 'status | windows | capture | click | type | key | scroll | drag | move | pause | resume | overlay',
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          description: 'status | windows | capture | click | type | key | scroll | drag | move | pause | resume | overlay',
+        },
+        x: { type: 'number', description: '屏幕绝对 x（click/type/scroll/drag 的起点/move/overlay）' },
+        y: { type: 'number', description: '屏幕绝对 y' },
+        toX: { type: 'number', description: 'drag 终点 x' },
+        toY: { type: 'number', description: 'drag 终点 y' },
+        button: { type: 'string', description: 'left（默认）或 right' },
+        count: { type: 'integer', description: '点击次数，默认 1；2 = 双击' },
+        text: { type: 'string', description: 'type 要输入的文字' },
+        replace: { type: 'boolean', description: 'type：true 覆盖原内容，false（默认）追加' },
+        keys: { type: 'string', description: 'key：组合键，如 "ctrl+c"、"alt+tab"、"enter"' },
+        mode: {
+          type: 'string',
+          description: 'auto（默认）| uia | message；physical 已禁用（会动真实鼠标/抢焦点）',
+        },
+        delta: { type: 'number', description: 'scroll 滚轮量：正数向上、负数向下，默认 -120' },
+        durationMs: { type: 'number', description: 'drag 持续时间，默认 400ms' },
+        hwnd: { type: 'number', description: '目标窗口句柄：click/scroll/drag/type/key 必填（先用 windows 拿 hwnd）；不传会拒绝，避免碰主人的窗口' },
+        path: { type: 'string', description: 'capture 保存 PNG 的绝对路径；省略则自动放 ~/.dsh/independent-input/shots/' },
+        rect: { type: 'string', description: 'capture 区域："x,y,w,h" 或 "full"；省略则截当前前台窗口' },
+        show: { type: 'boolean', description: 'overlay：false 隐藏 AI 光标，true/省略 显示' },
+        cursorMode: {
+          type: 'string',
+          description: 'overlay：companion（陪伴，一直显示，默认）| clean（整洁，动作后自动收起）',
+        },
+        cursorSize: {
+          type: 'number',
+          description: 'overlay：AI 光标大小（像素，24–192，默认 64）',
+        },
       },
-      x: { type: 'number', description: '屏幕绝对 x（click/type/scroll/drag 的起点/move/overlay）' },
-      y: { type: 'number', description: '屏幕绝对 y' },
-      toX: { type: 'number', description: 'drag 终点 x' },
-      toY: { type: 'number', description: 'drag 终点 y' },
-      button: { type: 'string', description: 'left（默认）或 right' },
-      count: { type: 'integer', description: '点击次数，默认 1；2 = 双击' },
-      text: { type: 'string', description: 'type 要输入的文字' },
-      replace: { type: 'boolean', description: 'type：true 覆盖原内容，false（默认）追加' },
-      keys: { type: 'string', description: 'key：组合键，如 "ctrl+c"、"alt+tab"、"enter"' },
-      mode: {
-        type: 'string',
-        description: 'auto（默认）| uia | message；physical 已禁用（会动真实鼠标/抢焦点）',
-      },
-      delta: { type: 'number', description: 'scroll 滚轮量：正数向上、负数向下，默认 -120' },
-      durationMs: { type: 'number', description: 'drag 持续时间，默认 400ms' },
-      hwnd: { type: 'number', description: '目标窗口句柄：click/scroll/drag/type/key 必填（先用 windows 拿 hwnd）；不传会拒绝，避免碰主人的窗口' },
-      path: { type: 'string', description: 'capture 保存 PNG 的绝对路径；省略则自动放 ~/.dsh/independent-input/shots/' },
-      rect: { type: 'string', description: 'capture 区域："x,y,w,h" 或 "full"；省略则截当前前台窗口' },
-      show: { type: 'boolean', description: 'overlay：false 隐藏 AI 光标，true/省略 显示' },
-      cursorMode: {
-        type: 'string',
-        description: 'overlay：companion（陪伴，一直显示，默认）| clean（整洁，动作后自动收起）',
-      },
-      cursorSize: {
-        type: 'number',
-        description: 'overlay：AI 光标大小（像素，24–192，默认 64）',
-      },
+      required: ['action'],
     },
     output: {
       schema: {
