@@ -86,6 +86,7 @@ public static class DshInput
     public const int WM_KEYUP = 0x0101;
     public const int WM_CHAR = 0x0102;
     public const uint WM_SETTEXT = 0x000C;
+    public const uint WM_GETTEXT = 0x000D;
     public const int WM_SYSKEYDOWN = 0x0104;
     public const int WM_SYSKEYUP = 0x0105;
     public const int WM_MOUSEMOVE = 0x0200;
@@ -273,10 +274,16 @@ public static class DshInput
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr SendMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, StringBuilder lParam);
+    [DllImport("user32.dll")]
+    public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowUnicode(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     public static extern bool SetProcessDPIAware();
@@ -812,6 +819,46 @@ public static class DshInput
         return sb.ToString();
     }
 
+    public static bool IsEditableWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+        string cls = WindowClass(hwnd);
+        if (string.IsNullOrEmpty(cls)) return false;
+        string up = cls.ToUpperInvariant();
+        return up.Contains("EDIT") || up.Contains("TEXTBOX") || up.Contains("SCINTILLA") || up.Contains("RICHTEXT");
+    }
+
+    static IntPtr editableChild = IntPtr.Zero;
+    public static IntPtr FirstEditableChild(IntPtr root)
+    {
+        editableChild = IntPtr.Zero;
+        if (root == IntPtr.Zero) return IntPtr.Zero;
+        EnumWindowsProc cb = delegate(IntPtr h, IntPtr l)
+        {
+            if (IsWindowVisible(h) && IsEditableWindow(h)) { editableChild = h; return false; }
+            return true;
+        };
+        EnumChildWindows(root, cb, IntPtr.Zero);
+        GC.KeepAlive(cb);
+        return editableChild;
+    }
+
+    // 读别的进程的控件文字必须走 WM_GETTEXT；GetWindowText 跨进程只会给窗口标题（控件是空串）。
+    public static string GetTextMessage(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return "";
+        int cap = 4096;
+        for (int attempt = 0; attempt < 4; attempt++)
+        {
+            StringBuilder sb = new StringBuilder(cap + 2);
+            IntPtr n = SendMessageW(hwnd, WM_GETTEXT, new IntPtr(cap + 1), sb);
+            string s = sb.ToString();
+            if ((int)n < cap) return s;
+            cap *= 8;
+        }
+        return "";
+    }
+
     public static int WindowPid(IntPtr hwnd)
     {
         int pid;
@@ -917,6 +964,7 @@ public static class DshInput
 
     public static void PostText(IntPtr hwnd, string text)
     {
+        // wParam 按 Unicode 码点发；ANSI 窗口由系统在消息转换时按它的代码页处理。
         foreach (char ch in text)
         {
             if (!PostMessage(hwnd, WM_CHAR, new IntPtr((int)ch), new IntPtr(1))) throw new Exception("PostMessage char failed");
@@ -1862,30 +1910,58 @@ function Invoke-Request($req) {
         if ($child -ne [IntPtr]::Zero) { $h = $child }
       }
 
-      $cls = [DshInput]::WindowClass($h)
-      if ($cls -match 'EDIT|Edit|TextBox') {
-        $cur = [DshInput]::GetWindowText($h)
+      # 找可编辑目标：点在哪就优先那个子控件；没给坐标就从整个窗口里找第一个可编辑子控件。
+      $edit = [IntPtr]::Zero
+      if ([DshInput]::IsEditableWindow($h)) { $edit = $h }
+      elseif ([DshInput]::IsEditableWindow($root)) { $edit = $root }
+      else { $edit = [DshInput]::FirstEditableChild($root) }
+
+      $report = @()
+      if ($edit -ne [IntPtr]::Zero) {
+        $cur = [DshInput]::GetTextMessage($edit)
         $want = if ($replace) { $text } else { $cur + $text }
-        [DshInput]::SetTextMessage($h, $want) | Out-Null
+        [DshInput]::SetTextMessage($edit, $want) | Out-Null
         Start-Sleep -Milliseconds 60
-        $now = [DshInput]::GetWindowText($h)
+        $now = [DshInput]::GetTextMessage($edit)
         if ($now -eq $want) {
           if ($hasPoint) { Show-StateAt 'text' ([int]$req.x) ([int]$req.y) }
-          return @{ ok = $true; via = 'wm_settext'; hwnd = [long]$h; target = [long]$root; verified = $true; note = '直接写入目标 Edit 控件，未抢焦点、未移动鼠标' }
+          return @{ ok = $true; via = 'wm_settext'; hwnd = [long]$edit; target = [long]$root; verified = $true; note = '直接写入目标 Edit 控件，未抢焦点、未移动鼠标' }
         }
+        $report += ('wm_settext 回读不一致：' + $now)
       }
 
-      $r = Set-UiaTextInWindow $h $text $replace
+      $uiaHwnd = if ($edit -ne [IntPtr]::Zero) { $edit } else { $h }
+      $r = Set-UiaTextInWindow $uiaHwnd $text $replace
       if ($r.ok) {
         if ($hasPoint) { Show-StateAt 'text' ([int]$req.x) ([int]$req.y) }
-        $r['hwnd'] = [long]$h
+        $r['hwnd'] = [long]$uiaHwnd
         $r['target'] = [long]$root
         return $r
       }
+      $report += ('uia：' + [string]$r.reason)
 
-      [DshInput]::PostText($h, $text)
-      if ($hasPoint) { Show-StateAt 'text' ([int]$req.x) ([int]$req.y) }
-      return @{ ok = $true; via = 'message-hwnd'; hwnd = [long]$h; target = [long]$root; verified = $false; note = '已向目标窗口投递文字；不抢焦点' }
+      if ($edit -ne [IntPtr]::Zero) {
+        $before = [DshInput]::GetTextMessage($edit)
+        [DshInput]::PostText($edit, $text)
+        Start-Sleep -Milliseconds 80
+        $nowChar = [DshInput]::GetTextMessage($edit)
+        if ($nowChar -ne $before) {
+          if ($hasPoint) { Show-StateAt 'text' ([int]$req.x) ([int]$req.y) }
+          return @{ ok = $true; via = 'message-hwnd'; hwnd = [long]$edit; target = [long]$root; verified = $true; note = '已向可编辑控件逐字投递 WM_CHAR，并回读确认' }
+        }
+        $report += 'wm_char 回读无变化'
+      }
+
+      if (-not $hasPoint -and $edit -eq [IntPtr]::Zero) {
+        return @{
+          ok = $false; reason = 'no-editable-target'; hwnd = [long]$h; target = [long]$root; attempts = $report
+          note = '这个窗口里找不到可编辑子控件；请先用 windows/capture 拿到坐标，带 x、y 再调 type'
+        }
+      }
+      return @{
+        ok = $false; reason = 'type-unverified'; hwnd = [long]$h; target = [long]$root; attempts = $report
+        note = '三种方式都没能确认文字真的进去了；先别重试（会重复输入），改用 click 聚焦后再试或问主人'
+      }
     }
     'key' {
       $mode = if ($req.mode) { [string]$req.mode } else { 'auto' }
