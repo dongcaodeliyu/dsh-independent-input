@@ -1,4 +1,5 @@
-﻿# dsh-independent-input sidecar
+﻿. (Join-Path $PSScriptRoot 'lib/auth-privacy.ps1')
+# dsh-independent-input sidecar
 # Windows PowerShell 5.1, STA. 一条 JSON 一行请求/响应。
 # 设计目标：默认不碰主人的真实光标和键盘焦点（UIA / 窗口消息），
 # 物理输入只作为显式回退，并且主人一碰鼠标键盘就立刻暂停、还原光标。
@@ -1991,6 +1992,8 @@ function Invoke-Request($req) {
       return @{ ok = $true; via = 'message-hwnd'; hwnd = [long]$h; target = [long]$root; verified = $false; note = '已投递给指定窗口；不移动真实鼠标' }
     }
     'capture' {
+      $privacy=Get-CaptureAuthPrivacy ([long][DshInput]::GetForegroundWindow())
+      if($privacy.sensitive){return @{ok=$false;reason='authentication-url-screenshot-suppressed';privacy=$privacy}}
       $path = [string]$req.path
       if ([string]::IsNullOrWhiteSpace($path)) { throw 'path required' }
       $wasVisible = [DshOverlay]::VisibleNow()

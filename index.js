@@ -1,3 +1,4 @@
+import {sanitizePublic,sanitizePublicError} from './lib/auth-privacy.js'
 /**
  * dsh-independent-input · 独立鼠标键盘
  *
@@ -282,12 +283,12 @@ function readBody(req) {
   })
 }
 
-export async function apply(ctx, rawConfig = {}) {
-  const defineTool = await loadDefineTool()
+export async function apply(ctx, rawConfig = {}, runtime = {}) {
+  const defineTool = runtime.defineTool || await loadDefineTool()
   const log = (message) => { try { ctx?.logger?.info?.(`[independent-input] ${message}`) } catch { /* ignore */ } }
   const saved = await loadSavedSettings(log)
   let current = normalizeSettings(saved, normalizeSettings(rawConfig))
-  const engine = new InputEngine({ log, ...current })
+  const engine = runtime.engine || new InputEngine({ log, ...current })
   const toolConfig = toolSpec()
 
   const tool = {
@@ -411,6 +412,8 @@ export async function apply(ctx, rawConfig = {}) {
     },
   }
 
+  const execute=tool.execute
+  tool.execute=async(...args)=>{try{return sanitizePublic(await execute(...args))}catch(error){throw sanitizePublicError(error)}}
   const dispose = ctx.tools.register(defineTool(tool))
 
   const applySettings = async (next) => {
@@ -522,9 +525,9 @@ async function capture(ctx, engine, args) {
   }
 
   const path = args.path || join(homedir(), '.dsh', 'independent-input', 'shots', `shot-${Date.now()}.png`)
-  await mkdir(dirname(path), { recursive: true })
   const saved = await engine.request('capture', { path, rect }, 30000)
 
+  if(saved.ok===false)return toLosslessJson({text:resultText('capture',saved),meta:saved})
   let images = []
   try {
     const data = await readFile(path)
