@@ -164,3 +164,7 @@ sidecar 在第一次调用工具时才启动；C# 源码用 `Add-Type` 在进程
   本项目**不把这份美术按 MIT 再授权**。
 - 原素材包未在本仓库内附带作者与许可原文；具体出处和条款以原素材包为准。详见 `NOTICE`。
 
+
+## Optional Codex integration
+
+See [integrations/codex](integrations/codex/README.md) for the separate Windows Codex MCP/plugin runtime, isolated verification and installation instructions. The original DSH entry points and cursor assets are unchanged.

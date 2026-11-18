@@ -1,0 +1,71 @@
+{
+  "name": "dsh-independent-input",
+  "version": "0.7.6",
+  "type": "module",
+  "description": "独立鼠标键盘：UIA只读观察与目标hwnd后台消息；默认保焦点策略拒绝provider输入，应用自身仍可能激活；设置页总开关，关掉后不执行任何动作。",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./sidecar.ps1": "./sidecar.ps1",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "assets",
+    "sidecar.ps1",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    ".codex-plugin",
+    ".agents",
+    ".mcp.json",
+    "skills",
+    "hooks",
+    "scripts",
+    "native"
+  ],
+  "scripts": {
+    "test:codex": "node test/codex-mcp-test.mjs",
+    "test:text": "powershell.exe -NoLogo -NoProfile -File test/text-dispatch-test.ps1",
+    "test:cursor": "powershell.exe -NoLogo -NoProfile -File test/cursor-metadata-test.ps1",
+    "test:route-hook": "node test/input-route-reminder-test.mjs",
+    "test:observe": "powershell.exe -NoLogo -NoProfile -File test/observation-test.ps1",
+    "test:capture": "node test/capture-integration-test.mjs",
+    "pack:codex": "powershell.exe -NoLogo -NoProfile -File scripts/package-codex.ps1",
+    "test:cancel": "node test/mcp-cancel-test.mjs",
+    "test:engine-interrupt": "node test/engine-interrupt-test.mjs",
+    "test:transport": "powershell.exe -NoLogo -NoProfile -File test/transport-reader-test.ps1",
+    "test:native-messages": "powershell.exe -NoLogo -NoProfile -File test/native-message-test.ps1",
+    "test:presentation": "node test/presentation-test.mjs",
+    "test:focus-policy": "node test/focus-policy-test.mjs",
+    "test:tooltip": "powershell.exe -NoProfile -File test/tooltip-render-test.ps1",
+    "test": "node scripts/verify.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "computer-use",
+    "input",
+    "uia",
+    "windows"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "license": "MIT"
+}

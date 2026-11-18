@@ -1,0 +1,65 @@
+// Actual membership state and actual header-host payload projection, no UI.
+import assert from 'node:assert/strict'
+import {DualLaneState} from '../lib/dual-lane-state.js'
+import {SharedHeaderHost} from '../lib/shared-header-host.js'
+const state=new DualLaneState(),calls=[]
+state.acquire({executionId:'A',name:'owned-A'});state.acquire({executionId:'B',name:'owned-B'})
+const host=new SharedHeaderHost({guardian:null});host.send=async(cmd,args)=>{calls.push({cmd,args});return {ok:true}}
+state.setMonitor('A','DISPLAY1',{x:50,y:50});state.setMonitor('B','DISPLAY1',{x:80,y:80})
+await host.update(state.screenMembers(),true);assert.equal(calls.at(-1).args.screens.length,1)
+state.setMonitor('A','DISPLAY2',{x:2000,y:50});await host.update(state.screenMembers(),true);assert.equal(calls.at(-1).args.screens.length,2)
+state.pause('A',{reason:'owned-stop'});await host.update(state.screenMembers(),true,true);assert.equal(calls.at(-1).args.screens.find(x=>x.device==='DISPLAY1').paused,false)
+// Capture temporary cursor hide deliberately has no membership mutation.
+const before=JSON.stringify(state.screenMembers());await host.update(state.screenMembers(),true);assert.equal(JSON.stringify(state.screenMembers()),before)
+state.resume('A');state.finish('A',()=> 'dead');await host.update(state.screenMembers(),true);assert.deepEqual(calls.at(-1).args.screens.map(x=>x.device),['DISPLAY1'])
+state.finish('B',()=> 'dead');host.proc={};await host.update(state.screenMembers(),false);assert.equal(calls.at(-1).args.screens.length,0)
+console.log('PASS actual member/projection contract: one header on shared screen, two on split screens, last-member hide, sibling kept on finish, capture hide does not unregister; no GUI/DPI acceptance')
+let now=0
+const three=new DualLaneState({},{now:()=>now})
+for(const [id,screen,point] of [['A','DISPLAY1',{x:20,y:50}],['B','DISPLAY1',{x:80,y:50}],['C','DISPLAY2',{x:2000,y:50}]]){
+ three.acquire({executionId:id});three.setMonitor(id,screen,point)
+}
+assert.equal(three.acquire({executionId:'D'}).reason,'control-busy')
+const render=()=>host.update(three.screenIndicators(),three.data.lanes.length>0,three.data.lanes.some(lane=>!lane.paused))
+const row=device=>calls.at(-1).args.screens.find(x=>x.device===device)
+three.pause('A',{source:'manual-tool',reason:'api'})
+await render()
+assert.equal(row('DISPLAY1').paused,false)
+assert.equal(row('DISPLAY1').indicator,undefined)
+three.pauseDesktop({source:'host-cancel',reason:'host-cancel'})
+await render()
+assert.equal(row('DISPLAY1').paused,true)
+assert.equal(row('DISPLAY1').indicator,undefined)
+three.pauseDesktop({source:'keyboard-hook',reason:'control-escape',keyboard:{gesture:'Ctrl+Esc',injected:false}})
+await render()
+assert.equal(row('DISPLAY1').indicator,'user-stopped')
+assert.equal(row('DISPLAY2').indicator,'user-stopped')
+three.resume('A')
+await render()
+assert.equal(row('DISPLAY1').paused,false)
+assert.equal(row('DISPLAY2').indicator,'user-stopped')
+three.resume('B');three.resume('C')
+const finish=(id,yielded=false)=>{const leaseId=three.lane(id).leaseId;three.prepareFinish(id,leaseId,yielded);three.finish(id,()=> 'dead',leaseId)}
+finish('A')
+await render()
+assert.equal(row('DISPLAY1').indicator,undefined)
+finish('C',true)
+await render()
+assert.equal(row('DISPLAY2').indicator,'yielded')
+assert.equal(row('DISPLAY2').notice,true)
+assert.equal(three.snapshot('D').turn,'ready')
+finish('B')
+await render()
+assert.equal(row('DISPLAY1').indicator,'finished')
+assert.equal(row('DISPLAY1').notice,true)
+assert.equal(calls.at(-1).args.activeLane,false)
+three.acquire({executionId:'D'},'begin')
+three.setMonitor('D','DISPLAY1',{x:20,y:50})
+await render()
+assert.equal(row('DISPLAY1').paused,false)
+now=2000
+assert.equal(three.expireHeaderNotices(),true)
+await render()
+assert.equal(row('DISPLAY2'),undefined)
+assert.equal(row('DISPLAY1').paused,false)
+console.log('PASS three lanes, distinct stop/finish/yield, unaffected sibling and new lane outrank notice, notices expire without blocking FIFO; no GUI acceptance')

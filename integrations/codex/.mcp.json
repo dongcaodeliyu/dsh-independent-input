@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "independent-input": {
+      "command": "node",
+      "args": ["scripts/codex-mcp-bootstrap.mjs"],
+      "cwd": ".",
+      "env_vars": ["PATH", "PATHEXT", "SystemRoot", "USERPROFILE", "TEMP", "TMP", "CODEX_HOME", "CODEX_INPUT_DATA_DIR", "CODEX_INPUT_ENABLED"],
+      "startup_timeout_sec": 45,
+      "tool_timeout_sec": 120
+    }
+  }
+}

@@ -1,0 +1,36 @@
+name: Codex isolated Windows checks
+on:
+  push:
+    paths: ['integrations/codex/**', '.github/workflows/codex-integration.yml']
+  pull_request:
+    paths: ['integrations/codex/**', '.github/workflows/codex-integration.yml']
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm test
+        working-directory: integrations/codex
+      - name: Build and verify standalone package
+        shell: pwsh
+        working-directory: integrations/codex
+        run: |
+          .\native\window-capture\build.cmd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $output = Join-Path $env:RUNNER_TEMP 'codex-integration-package'
+          powershell.exe -NoProfile -File scripts/package-codex.ps1 -OutputDirectory $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $zip = Get-ChildItem -LiteralPath $output -Filter 'dsh-independent-input-codex-*.zip'
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath $output
+          node test/auth-mcp-entry-test.mjs (Join-Path $output 'dsh-independent-input')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/launch-stage-test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/launch-owner-ipc-test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

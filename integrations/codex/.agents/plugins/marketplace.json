@@ -1,0 +1,10 @@
+{
+  "name": "dsh-independent-input-local",
+  "interface": {"displayName": "独立输入本地插件"},
+  "plugins": [{
+    "name": "dsh-independent-input",
+    "source": {"source": "local", "path": "./"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
+    "category": "Productivity"
+  }]
+}

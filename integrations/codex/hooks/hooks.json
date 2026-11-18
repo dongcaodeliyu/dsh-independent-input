@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/scripts/input-route-reminder.mjs\"",
+        "timeout": 5,
+        "additionalContextLimit": 1000
+      }]
+    }]
+  }
+}

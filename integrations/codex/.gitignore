@@ -1,0 +1,5 @@
+native/window-capture/bin/
+*.zip
+node_modules/
+work/
+native/bin/
